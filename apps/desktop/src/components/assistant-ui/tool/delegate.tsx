@@ -13,6 +13,7 @@ import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { useI18n } from '@/i18n'
 import { AlertCircle, CheckCircle2 } from '@/lib/icons'
 import { displayModelName } from '@/lib/model-status-label'
+import { useSessionDisplay } from '@/lib/use-session-display'
 import { useSessionSlice } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import { $subagentsBySession } from '@/store/subagents'
@@ -22,8 +23,10 @@ import {
   type DelegateRow,
   delegateRowsFromCall,
   type DelegateRowStatus,
+  delegateShortTitle,
   isDelegateRowLive,
-  mergeDelegateRows
+  mergeDelegateRows,
+  settleDelegateRowsFromTranscript
 } from './delegate-model'
 import { formatDurationSeconds, type ToolPart } from './fallback-model'
 import { ToolRunTicker } from './run-ticker'
@@ -131,6 +134,40 @@ function DelegateRowView({ row }: { row: DelegateRow }) {
 }
 
 /**
+ * One child in a quiet transcript: a single line that reads "Working on: …"
+ * until the child settles, then "Done: …". No model, timer, ticker or link —
+ * the owner chose not to show the machinery, only that work is under way.
+ */
+function QuietDelegateRowView({ row }: { row: DelegateRow }) {
+  const { t } = useI18n()
+  const copy = t.assistant.tool
+  const working = isDelegateRowLive(row.status) || row.status === 'dispatched'
+  const failed = row.status === 'failed' || row.status === 'interrupted'
+  const title = delegateShortTitle(row.goal) || row.goal
+
+  const label = working ? copy.quietWorkingOn(title) : failed ? copy.quietFailed(title) : copy.quietDone(title)
+
+  const glyph = working ? (
+    <GlyphSpinner
+      ariaLabel={copy.statusRunning}
+      className="size-3.5 text-[0.95rem] text-(--ui-text-tertiary)"
+      spinner="breathe"
+    />
+  ) : (
+    statusGlyph(row.status, failed ? copy.statusError : copy.statusDone)
+  )
+
+  return (
+    <div className="flex min-w-0 max-w-full items-center gap-1.5" data-conversation-scaffold="" data-quiet-delegate-row="">
+      <span className={SCAFFOLD_GLYPH_CLASS}>{glyph}</span>
+      <span className={cn(SCAFFOLD_LABEL_CLASS, 'min-w-0 truncate', working && 'shimmer')} title={row.goal}>
+        {label}
+      </span>
+    </div>
+  )
+}
+
+/**
  * A `delegate_task` call, as the fan-out it is.
  *
  * The generic tool row can only say "Delegated 2 tasks" and hand over a blob
@@ -144,16 +181,35 @@ function DelegateRowView({ row }: { row: DelegateRow }) {
  * them nothing.
  */
 export const DelegateTool: FC<Pick<ToolPart, 'args' | 'result' | 'toolCallId'>> = ({ args, result, toolCallId }) => {
-  const sessionId = useStore(useSessionView().$runtimeId)
+  const view = useSessionView()
+  const sessionId = useStore(view.$runtimeId)
+  const messages = useStore(view.$messages)
   const live = useSessionSlice($subagentsBySession, sessionId)
+  const { quiet } = useSessionDisplay()
 
-  const rows = useMemo(
-    () => mergeDelegateRows(delegateRowsFromCall(args, result, toolCallId), live, toolCallId),
-    [args, live, result, toolCallId]
+  const settledIds = useMemo(
+    () => new Set(messages.flatMap(message => message.asyncDelegationIds ?? [])),
+    [messages]
   )
+
+  const rows = useMemo(() => {
+    const merged = mergeDelegateRows(delegateRowsFromCall(args, result, toolCallId), live, toolCallId)
+
+    return settleDelegateRowsFromTranscript(merged, result, settledIds)
+  }, [args, live, result, settledIds, toolCallId])
 
   if (rows.length === 0) {
     return null
+  }
+
+  if (quiet) {
+    return (
+      <div className="grid min-w-0 gap-1" data-delegate-card="" data-delegate-quiet="" data-slot="tool-block">
+        {rows.map(row => (
+          <QuietDelegateRowView key={row.id} row={row} />
+        ))}
+      </div>
+    )
   }
 
   return (

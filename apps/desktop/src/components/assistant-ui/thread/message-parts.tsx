@@ -34,11 +34,11 @@ import { separateGluedReasoningBlocks } from '@/lib/reasoning-blocks'
 import { isTodoToolName } from '@/lib/todos'
 import { type CardToolName, isCardTool, isCardToolName } from '@/lib/tool-render-class'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
+import { useSessionDisplay, useSessionShowToolActivity } from '@/lib/use-session-display'
 import { cn } from '@/lib/utils'
 import { onboardingChatStore } from '@/store/onboarding-session'
-import { $reasoningCollapsedByDefault, $showReasoning } from '@/store/reasoning-disclosure'
+import { $reasoningCollapsedByDefault } from '@/store/reasoning-disclosure'
 import { useForcedTextDirection } from '@/store/text-direction'
-import { $showToolActivity } from '@/store/tool-activity'
 
 type TimelineToolCallProps = ToolCallMessagePartProps & { completedAt?: number; timestamp?: number }
 
@@ -149,7 +149,7 @@ const failedCallNeedsUser = (part: TimelineToolCallProps): boolean => {
 }
 
 const ChainToolFallback: FC<TimelineToolCallProps> = props => {
-  const showToolActivity = useStore($showToolActivity)
+  const showToolActivity = useSessionShowToolActivity()
 
   // todo parts are hoisted to a dedicated panel above the message content.
   if (isTodoToolName(props.toolName)) {
@@ -376,7 +376,7 @@ const ReasoningAccordionGroup: FC<{ children?: ReactNode; endIndex: number; star
   endIndex,
   startIndex
 }) => {
-  const showReasoning = useStore($showReasoning)
+  const { showReasoning } = useSessionDisplay()
   const messageId = useAuiState(s => s.message.id)
   const messageRunning = useAuiState(s => s.message.status?.type === 'running')
 
@@ -448,7 +448,7 @@ const ReasoningTextPart: ReasoningMessagePartComponent = () => {
   // The group above already hides grouped parts; this covers a Reasoning part
   // rendered without a ReasoningGroup wrapper (assistant-ui drops the group
   // when a ChainOfThought component is registered).
-  const showReasoning = useStore($showReasoning)
+  const { showReasoning } = useSessionDisplay()
   const textDirection = useForcedTextDirection()
 
   if (!showReasoning) {

@@ -12,6 +12,8 @@ import { persistedTurnsEquivalent } from './pending-turn-identity'
 // IGNORED:  fields that are intentionally not compared — display-only metadata
 //           or reference identity the runtime already guarantees.
 //   attachmentRefs — composer-side metadata; already reconciled in reconcileResumeMessages
+//   asyncDelegationIds — parsed from the same completion content as asyncResult,
+//                        which is compared, so it never changes on its own
 //   serverRowSpan — backend rows the folded message covers; the older-page offset
 //                   accounting reads it, the transcript never paints it
 //
@@ -54,7 +56,7 @@ const COMPARED_FIELDS = [
   'durationS'
 ] as const
 
-const IGNORED_FIELDS = ['attachmentRefs', 'parts', 'serverRowSpan'] as const
+const IGNORED_FIELDS = ['asyncDelegationIds', 'attachmentRefs', 'parts', 'serverRowSpan'] as const
 
 // Compile-time check: every ChatMessagePart discriminant must be handled by
 // chatPartsEquivalent. If @assistant-ui adds a new part type, this fails tsc.

@@ -200,3 +200,82 @@ export function mergeDelegateRows(
 }
 
 export const isDelegateRowLive = (status: DelegateRowStatus): boolean => status === 'running' || status === 'queued'
+
+// ── Quiet view ──────────────────────────────────────────────────────────────
+//
+// A quiet transcript (the owner hides its tool feed) shows each delegated
+// child as ONE line — "Working on: …" that resolves to "Done: …" — instead of
+// the full card. A background child outlives the turn that dispatched it, and
+// after a reload the subagent store no longer knows it, so the line also
+// settles from the transcript: the async-delegation completion carries the
+// same `deleg_…` id the dispatch result handed back.
+
+const settledStatus = (status: DelegateRowStatus): boolean =>
+  status === 'completed' || status === 'failed' || status === 'interrupted'
+
+/** The completion id each row will settle under: its unit's id when the call
+ *  split into independently reported units, else the call's own id. */
+export function delegateUnitIds(result: unknown, count: number): string[] {
+  const record = parseMaybeObject(result)
+  const base = field(record, 'delegation_id')
+  const units = Array.isArray(record.units) ? record.units.map(parseMaybeObject) : []
+
+  return Array.from({ length: count }, (_unused, index) => {
+    const unit = units.find(
+      candidate => Array.isArray(candidate.task_indexes) && candidate.task_indexes.map(Number).includes(index)
+    )
+
+    return (unit ? field(unit, 'delegation_id') : '') || base
+  })
+}
+
+/** Rows a live/rehydrated view left running or parked, settled by the
+ *  completions already present in the transcript. Live terminal states win. */
+export function settleDelegateRowsFromTranscript(
+  rows: readonly DelegateRow[],
+  result: unknown,
+  settledIds: ReadonlySet<string>
+): DelegateRow[] {
+  const base = field(parseMaybeObject(result), 'delegation_id')
+
+  if (!base || settledIds.size === 0) {
+    return [...rows]
+  }
+
+  const unitIds = delegateUnitIds(result, rows.length)
+
+  return rows.map((row, index) => {
+    if (settledStatus(row.status)) {
+      return row
+    }
+
+    const unit = unitIds[index]
+
+    if (settledIds.has(`${unit}#${index}`) || settledIds.has(`${base}#${index}`)) {
+      return { ...row, status: 'failed' }
+    }
+
+    if (settledIds.has(unit) || settledIds.has(base)) {
+      return { ...row, status: 'completed' }
+    }
+
+    return row
+  })
+}
+
+const QUIET_TITLE_MAX = 80
+
+/** A goal as a one-line title: its first non-empty line, cut to the first
+ *  sentence when that fits, without markdown leaders or a trailing period. */
+export function delegateShortTitle(goal: string, max = QUIET_TITLE_MAX): string {
+  const firstLine =
+    goal
+      .split(/\r?\n/)
+      .map(line => line.replace(/^[\s#>*\-•]+/, '').replace(/\*\*/g, '').trim())
+      .find(Boolean) ?? ''
+
+  const sentence = firstLine.match(/^(.+?[.!?])(?:\s|$)/)?.[1] ?? firstLine
+  const text = (sentence.length <= max ? sentence : firstLine).replace(/[.]+$/, '')
+
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text
+}

@@ -39,6 +39,9 @@ export type ChatMessage = {
   /** Result body only; the system text remains the compact completion label. */
   asyncResult?: string
   asyncResultKind?: 'process'
+  /** Delegation ids an async-delegation completion settled (`deleg_…`, unit ids keep
+   *  their `-N` suffix); a `#<taskIndex>` suffix marks a single failed task. */
+  asyncDelegationIds?: string[]
   timestamp?: number
   completedAt?: number
   pending?: boolean

@@ -312,6 +312,29 @@ function messageReactions(metadata: SessionMessage['display_metadata']): Message
 
 // Only parse producer-owned boundaries, never render the model's task preamble.
 // Older backends can persist an unwrapped result rather than an envelope.
+const ASYNC_DELEGATION_HEADER_RE = /\[ASYNC DELEGATION ([A-Z ]+?) — (deleg_[A-Za-z0-9-]+)(?:, task (\d+)\/\d+)?\]/g
+
+/** The delegation ids an async-delegation completion settled, read from its
+ *  `[ASYNC DELEGATION … — deleg_…]` headers. A single-task failure notice is
+ *  recorded as `<id>#<taskIndex>` so it marks that one task, not the batch. */
+export function asyncDelegationIds(content: string): string[] {
+  const ids = new Set<string>()
+
+  for (const match of content.matchAll(ASYNC_DELEGATION_HEADER_RE)) {
+    const [, kind, id, task] = match
+
+    ids.add(kind.includes('TASK FAILED') && task ? `${id}#${Number(task) - 1}` : id)
+  }
+
+  return [...ids]
+}
+
+function delegationIdsField(content: string): { asyncDelegationIds?: string[] } {
+  const ids = asyncDelegationIds(content)
+
+  return ids.length > 0 ? { asyncDelegationIds: ids } : {}
+}
+
 function asyncResultBody(content: string): string | undefined {
   let bodies = [content]
 
@@ -704,6 +727,9 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
         ? { asyncResult: asyncResultBody(displayContentForMessage(message.role, message.content || content)) }
         : {}),
       ...(message.display_kind === 'process_complete' ? { asyncResultKind: 'process' as const } : {}),
+      ...(message.display_kind === 'async_delegation_complete'
+        ? delegationIdsField(String(message.content || content || ''))
+        : {}),
       timestamp: earliestTimestamp(message.timestamp, ...parts.map(part => part.timestamp)),
       ...(rowId !== undefined ? { rowId } : {}),
       ...(pendingAbsorbedRows > 0 ? { serverRowSpan: pendingAbsorbedRows + 1 } : {}),

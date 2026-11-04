@@ -475,7 +475,8 @@ export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
           ...timelineMeta,
           ...(message.asyncResult ? { asyncResult: message.asyncResult } : {}),
           ...(message.asyncResultKind ? { asyncResultKind: message.asyncResultKind } : {}),
-          ...contentRefusedMeta(message)
+          ...contentRefusedMeta(message),
+          ...(message.asyncDelegationIds?.length ? { asyncDelegationIds: message.asyncDelegationIds } : {})
         }
       }
     } as ThreadMessage

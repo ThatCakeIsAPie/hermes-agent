@@ -11,6 +11,7 @@ import { LogView } from '@/components/ui/log-view'
 import { ToolIcon } from '@/components/ui/tool-icon'
 import { useI18n } from '@/i18n'
 import { LinkifiedText } from '@/lib/external-link'
+import { useSessionDisplay } from '@/lib/use-session-display'
 import { cn } from '@/lib/utils'
 
 const SLASH_STATUS_RE = /^slash:(?<command>\/[^\n]+)\n(?<output>[\s\S]*)$/
@@ -91,6 +92,7 @@ export const SystemMessage: FC = () => {
   const text = useAuiState(s => messageContentText(s.message.content))
   const asyncResult = useAuiState(s => s.message.metadata.custom?.asyncResult)
   const processResult = useAuiState(s => s.message.metadata.custom?.asyncResultKind === 'process')
+  const { quiet } = useSessionDisplay()
 
   const contentRefused = useAuiState(
     s => s.message.metadata.custom?.contentRefused as undefined | { notice?: string }
@@ -103,6 +105,13 @@ export const SystemMessage: FC = () => {
   }
 
   if (!text) {
+    return null
+  }
+
+  // A quiet transcript (the owner hides its tool feed) shows only the agent
+  // talking: background completions are the agent's input, and it reports
+  // their outcome itself. The delegate line above already reads "Done".
+  if (quiet && (processResult || (typeof asyncResult === 'string' && asyncResult))) {
     return null
   }
 

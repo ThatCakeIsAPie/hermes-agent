@@ -4131,6 +4131,9 @@ export interface Translations extends NoticeTranslations {
       statusError: string
       statusRecovered: string
       statusDone: string
+      quietWorkingOn: (title: string) => string
+      quietDone: (title: string) => string
+      quietFailed: (title: string) => string
       /** Over-budget / rejected memory write title — not "Saved to memory". */
       resultUnavailable: string
       resultInterrupted: string
