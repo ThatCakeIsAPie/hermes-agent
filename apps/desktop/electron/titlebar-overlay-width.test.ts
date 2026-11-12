@@ -48,6 +48,22 @@ test('native Windows and Linux keep the same window-controls overlay', () => {
   }
 })
 
+test('hidden window controls drop the overlay and its reservation on Windows and Linux', () => {
+  const input = { titlebarHeight: 34, color: 'transparent', foreground: '#ffffff', hidden: true }
+
+  for (const platform of ['windows', 'linux'] as const) {
+    assert.equal(titleBarOverlayOptions({ platform, ...input }), false)
+  }
+
+  assert.equal(nativeOverlayWidth({ hidden: true }), 0)
+  assert.equal(nativeOverlayWidth({ isWindows: true, hidden: true }), 0)
+})
+
+test('hidden window controls leave macOS traffic lights and WSLg renderer controls alone', () => {
+  assert.deepEqual(titleBarOverlayOptions({ platform: 'mac', titlebarHeight: 34, hidden: true }), { height: 34 })
+  assert.equal(nativeOverlayWidth({ isWsl: true, hidden: true }), OVERLAY_FALLBACK_WIDTH)
+})
+
 test('macOS keeps its height-only traffic-light overlay', () => {
   assert.deepEqual(
     titleBarOverlayOptions({

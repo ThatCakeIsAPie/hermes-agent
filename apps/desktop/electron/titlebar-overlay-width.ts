@@ -15,6 +15,8 @@ interface TitleBarOverlayOptionsInput {
   dark?: boolean
   /** Current webContents zoom factor (1 = 100%); scales the overlay height. */
   zoomFactor?: number
+  /** The user turned the native min/max/close buttons off (window-controls.json). */
+  hidden?: boolean
 }
 
 /**
@@ -31,8 +33,10 @@ interface TitleBarOverlayOptionsInput {
  *
  * @param {{ isMac?: boolean }} opts
  */
-export function nativeOverlayWidth({ isWindows = false, isWsl = false, isMac = false } = {}) {
-  if (isMac) {
+export function nativeOverlayWidth({ isWindows = false, isWsl = false, isMac = false, hidden = false } = {}) {
+  // Hidden controls paint nothing, so nothing is reserved for them. WSLg keeps
+  // its renderer-painted controls either way.
+  if (isMac || (hidden && !isWsl)) {
     return 0
   }
 
@@ -52,7 +56,8 @@ export function titleBarOverlayOptions({
   color,
   foreground,
   dark = false,
-  zoomFactor = 1
+  zoomFactor = 1,
+  hidden = false
 }: TitleBarOverlayOptionsInput = {}) {
   // Electron's Linux overlay keeps a narrow, unscaled three-button cluster
   // under WSLg. The renderer owns larger Windows-shaped controls there while
@@ -63,6 +68,13 @@ export function titleBarOverlayOptions({
 
   if (platform === 'mac') {
     return { height: macTitleBarOverlayHeight({ darwinMajor, titlebarHeight }) }
+  }
+
+  // No overlay object = no native buttons under `titleBarStyle: hidden`. For
+  // tiling compositors (Hyprland, sway) where the window manager closes and
+  // arranges windows and the buttons only cover the app's own top-right tools.
+  if (hidden) {
+    return false
   }
 
   return {

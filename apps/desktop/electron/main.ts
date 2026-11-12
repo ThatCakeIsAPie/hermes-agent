@@ -1628,12 +1628,31 @@ function getWindowBackgroundColor() {
 // to GetFrameColor() on some Electron builds; rgba(1,0,0,0) is the escape hatch.
 const TITLEBAR_OVERLAY_COLOR = 'rgba(1, 0, 0, 0)'
 
+// Per-device opt-out of the native min/max/close buttons on Windows/Linux:
+// `{ "hidden": true }` in <userData>/window-controls.json. Read once, lazily,
+// so it resolves after any userData override; takes effect on the next launch.
+let nativeWindowControlsHiddenCache: boolean | null = null
+
+function nativeWindowControlsHidden() {
+  if (nativeWindowControlsHiddenCache === null) {
+    try {
+      const file = path.join(app.getPath('userData'), 'window-controls.json')
+      nativeWindowControlsHiddenCache = JSON.parse(fs.readFileSync(file, 'utf8')).hidden === true
+    } catch {
+      nativeWindowControlsHiddenCache = false
+    }
+  }
+
+  return nativeWindowControlsHiddenCache
+}
+
 // WSLg returns false: the RDP host paints nothing for a frameless window and
 // Electron's own overlay drifts its hit-region under RAIL, so the renderer
 // paints its own min/max/close (wslg-window-controls.tsx) over the
 // hermes:window-control IPC channel. See titleBarOverlayOptions.
 function getTitleBarOverlayOptions(win?) {
   return titleBarOverlayOptions({
+    hidden: nativeWindowControlsHidden(),
     platform: IS_MAC ? 'mac' : IS_WINDOWS ? 'windows' : IS_WSL ? 'wslg' : 'linux',
     darwinMajor: DARWIN_MAJOR,
     titlebarHeight: TITLEBAR_HEIGHT,
@@ -6035,7 +6054,7 @@ function getWindowButtonPosition(win = mainWindow) {
 }
 
 function getNativeOverlayWidth() {
-  return nativeOverlayWidth({ isWindows: IS_WINDOWS, isWsl: IS_WSL, isMac: IS_MAC })
+  return nativeOverlayWidth({ isWindows: IS_WINDOWS, isWsl: IS_WSL, isMac: IS_MAC, hidden: nativeWindowControlsHidden() })
 }
 
 function getWindowState(win = mainWindow) {
